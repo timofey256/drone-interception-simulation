@@ -1,6 +1,6 @@
 ## Setup
 
-Prereq: You need Linux on Wayland (X11 works yoo but tweak the image start).
+Prereq: You need Linux on Wayland (X11 works too but tweak the image start).
 
 1. If you are on NixOS, modify your config:
 ```
