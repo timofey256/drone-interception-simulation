@@ -12,12 +12,17 @@ virtualisation.docker.enable = true;
 
 3. Make sure you are in a docker group by running `groups` in your terminal. If you are not there, add yourself and reboot (NixOS rebuild won't help btw, don't make my mistakes!).
 
-4. Autorize your DRM device. This command should print `non-network local connections being added to access control list`.
+4. Pull the PX4 submodule. It contains the required worlds and models. 
+```
+git submodule update --init --recursive
+```
+
+5. Autorize your DRM device. This command should print `non-network local connections being added to access control list`.
 ```
 $ xhost +local:
 ```
 
-5. Run docker image. Please read the command and modify it slightly to fit your DRI (card index and render number) and paths.
+6. Run docker image. Please read the command and modify it slightly to fit your DRI (card index and render number) and paths.
 ```
 $ docker run --rm -it  --net=host \
     -e DISPLAY -e XDG_RUNTIME_DIR \
