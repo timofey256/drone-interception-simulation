@@ -22,7 +22,12 @@ git submodule update --init --recursive
 $ xhost +local:
 ```
 
-6. Run docker image. Please read the command and modify it slightly to fit your DRI (card index and render number) and paths.
+6. Pull the docker image. 
+```
+docker pull gazebo:latest
+```
+
+7. Run docker image. Please read the command and modify it slightly to fit your DRI (card index and render number) and paths.
 ```
 $ docker run --rm -it  --net=host \
     -e DISPLAY -e XDG_RUNTIME_DIR \
