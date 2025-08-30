@@ -2,6 +2,7 @@
 <sdf version="1.6">
   <model name="shahed136">
     <static>false</static>
+    <speed>10.0</speed>   <!-- meters per second -->
     <link name="body">
       <visual name="visual">
         <geometry>
@@ -30,5 +31,8 @@
         </inertia>
       </inertial>
     </link>
+
+    <!-- Attach your plugin -->
+    <plugin name="shahed_plugin" filename="libShahedPlugin.so"/>
   </model>
 </sdf>

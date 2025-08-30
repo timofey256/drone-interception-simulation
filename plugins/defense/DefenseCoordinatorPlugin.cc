@@ -16,7 +16,7 @@ namespace gazebo
     private: std::vector<std::string> interceptors { 
         "interceptor_xplus", "interceptor_xminus",
         "interceptor_yplus", "interceptor_yminus" };
-    private: std::string shahedName = "shahed";
+    private: std::string shahedName = "shahed136";
 
     private: std::map<std::string, ignition::math::Vector3d> homePoses;
     private: double drone_activation_distance_m = 30.0;

@@ -68,17 +68,32 @@ namespace gazebo
         target = waypoints[currentIdx];
       }
 
-      // Direction toward current target
       ignition::math::Vector3d dir = (target - pos).Normalized();
-
-      // Desired velocity
       ignition::math::Vector3d vel = dir * speed;
-
-      // Apply velocity
       this->model->SetLinearVel(vel);
+
+      if (vel.Length() > 1e-6)
+      {
+        ignition::math::Vector3d dirNorm = dir.Normalized();
+
+        double yaw   = atan2(dirNorm.Y(), dirNorm.X());
+        double pitch = atan2(-dirNorm.Z(),
+                             sqrt(dirNorm.X()*dirNorm.X() + dirNorm.Y()*dirNorm.Y()));
+        double roll  = 0.0;
+
+        ignition::math::Quaterniond rot(roll, pitch, yaw);
+
+        // Mesh correction: adjust this if the drone's nose is not +X
+        ignition::math::Quaterniond meshFix(IGN_DTOR(-90), 0, IGN_DTOR(90));
+        ignition::math::Quaterniond finalRot = rot * meshFix;
+
+        ignition::math::Pose3d pose = this->model->WorldPose();
+        pose.Set(pos, finalRot);
+        this->model->SetWorldPose(pose);
+      }
+
     }
   };
 
   GZ_REGISTER_MODEL_PLUGIN(ShahedPlugin)
 }
-
