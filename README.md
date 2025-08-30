@@ -32,8 +32,8 @@ docker pull gazebo:latest
 $ docker run --rm -it  --net=host \
     -e DISPLAY -e XDG_RUNTIME_DIR \
     -v /tmp/.X11-unix:/tmp/.X11-unix -v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
-    -v /path/to/this/repo/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models:/root/.gazebo/models  -v /path/to/this/repo/PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds:/root/worlds  \
-    --device /dev/dri/card1   --device /dev/dri/renderD128 \
+    -v /path/to/this/repo/models:/root/.gazebo/models  -v /path/to/this/repo/worlds:/root/worlds  -v /path/to/this/repo/plugins:/root/gazebo-plugins \
+    --device /dev/dri/card1  --device /dev/dri/renderD128 \
     gazebo:latest gazebo /root/worlds/iris.world
 ```
 
