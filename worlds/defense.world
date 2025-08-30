@@ -3,11 +3,10 @@
   <include>
     <uri>model://quadrotor</uri>
   </include>
-  <plugin name="enemy_linear" filename="libEnemyLinearTrajPlugin.so">
-    <speed>22.0</speed>
-    <direction> -1 0 0 </direction>
-    <hold_z>50.0</hold_z>
-  </plugin>
+<plugin name="enemy_linear" filename="libEnemyLinearTrajPlugin.so">
+  <speed>22.0</speed>
+  <direction> -0.97 0.15 -0.20 </direction> <!-- ~8.6° down, slight +Y -->
+</plugin>
 </model>
 
 <!-- Defender -->
