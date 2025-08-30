@@ -125,7 +125,7 @@ class DefenderPNPlugin : public ModelPlugin {
         if (!enemy_) {
             enemy_ = world_->ModelByName(enemyName_);
             if (!enemy_) return;  // wait until enemy is spawned
-            tStart_ = world_->SimTime();
+            tStart_ = world_->SimTime().Double();
         }
 
         const double simTime = world_->SimTime().Double();
