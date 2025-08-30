@@ -1,0 +1,37 @@
+<!-- Enemy -->
+<model name="enemy">
+  <include>
+    <uri>model://quadrotor</uri>
+  </include>
+  <plugin name="enemy_linear" filename="libEnemyLinearTrajPlugin.so">
+    <speed>22.0</speed>
+    <direction> -1 0 0 </direction>
+    <hold_z>50.0</hold_z>
+  </plugin>
+</model>
+
+<!-- Defender -->
+<model name="defender">
+  <include>
+    <uri>model://quadrotor</uri>
+  </include>
+  <plugin name="defender_pn" filename="libDefenderPNPlugin.so">
+    <enemy_name>enemy</enemy_name>
+    <center> 0 0 0 </center>
+    <radius> 300.0 </radius>
+    <hold_alt> 50.0 </hold_alt>
+
+    <pn_N>4.0</pn_N>
+    <engage_radius>120.0</engage_radius>
+
+    <guard_noise_sigma>8.0</guard_noise_sigma>
+    <bearing_noise_sigma_deg>1.5</bearing_noise_sigma_deg>
+
+    <v_transit>25.0</v_transit>
+    <v_engage>35.0</v_engage>
+    <yaw_rate_max>1.2</yaw_rate_max>
+
+    <hit_distance>5.0</hit_distance>
+    <timeout_s>120.0</timeout_s>
+  </plugin>
+</model>
