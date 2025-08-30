@@ -1,0 +1,150 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="default">
+      <plugin name="defense_coordinator" filename="libDefenseCoordinatorPlugin.so"/>
+
+    <!-- Ground plane -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <!-- Sun -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- Protected site (the target at 0,0,0) -->
+    <model name="site">
+      <static>true</static>
+      <link name="body">
+        <visual name="vis">
+          <geometry>
+            <sphere>
+              <radius>2</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Protectors -->
+    <model name="interceptor_xplus">
+      <pose>10 0 10 0 0 0</pose>
+      <static>false</static>
+      <link name="body">
+        <inertial>
+          <mass>5</mass>
+        </inertial>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.1 0.8 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="interceptor_xminus">
+      <pose>-10 0 10 0 0 0</pose>
+      <static>false</static>
+      <link name="body">
+        <inertial>
+          <mass>5</mass>
+        </inertial>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.1 0.8 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="interceptor_yplus">
+      <pose>0 10 10 0 0 0</pose>
+      <static>false</static>
+      <link name="body">
+        <inertial>
+          <mass>5</mass>
+        </inertial>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.1 0.8 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="interceptor_yminus">
+      <pose>0 -10 10 0 0 0</pose>
+      <static>false</static>
+      <link name="body">
+        <inertial>
+          <mass>5</mass>
+        </inertial>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.1 0.8 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+
+    <!-- Spawn Shahed -->
+    <include>
+      <uri>model://shahed</uri>
+      <pose>200 50 50 0 0 0</pose>
+    </include>
+
+  </world>
+</sdf>
