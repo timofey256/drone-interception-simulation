@@ -93,6 +93,163 @@ class TargetLinear:
         return (self.r0 + self.v * t, self.v)
 
 @dataclass
+class TargetCurved:
+    """
+    Curved trajectory target with helical/spiral motion.
+    Combines linear motion with circular/helical components for evasive maneuvers.
+    """
+    r0: np.ndarray        # initial position (3,)
+    v_linear: np.ndarray  # linear velocity component (3,)
+    orbit_center: np.ndarray  # center of circular motion (3,)
+    orbit_radius: float   # radius of circular motion [m]
+    omega: float          # angular frequency [rad/s]
+    phase_offset: float = 0.0  # initial phase [rad]
+
+    def state(self, t: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Returns position and velocity at time t.
+        Motion = linear_motion + circular_motion_in_plane
+        """
+        # Linear component
+        r_linear = self.r0 + self.v_linear * t
+        
+        # Circular/helical component (in XY plane by default)
+        phase = self.omega * t + self.phase_offset
+        
+        # Circular motion vectors (perpendicular to linear velocity direction)
+        if norm(self.v_linear) > 1e-6:
+            # Create orthogonal basis for circular motion
+            v_unit = unit(self.v_linear)
+            # Use Z-axis as reference for cross product
+            ref_axis = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(v_unit, ref_axis)) > 0.9:  # nearly parallel to Z
+                ref_axis = np.array([1.0, 0.0, 0.0])  # use X-axis instead
+            
+            u1 = unit(np.cross(v_unit, ref_axis))  # first perpendicular direction
+            u2 = unit(np.cross(v_unit, u1))       # second perpendicular direction
+        else:
+            # Default to XY plane if no linear velocity
+            u1 = np.array([1.0, 0.0, 0.0])
+            u2 = np.array([0.0, 1.0, 0.0])
+        
+        # Circular displacement and velocity
+        r_circle = self.orbit_radius * (np.cos(phase) * u1 + np.sin(phase) * u2)
+        v_circle = self.orbit_radius * self.omega * (-np.sin(phase) * u1 + np.cos(phase) * u2)
+        
+        # Total motion
+        position = r_linear + r_circle
+        velocity = self.v_linear + v_circle
+        
+        return (position, velocity)
+
+@dataclass
+class TargetSinusoidal:
+    """
+    Sinusoidal trajectory target for weaving/serpentine motion.
+    """
+    r0: np.ndarray        # initial position (3,)
+    v_base: np.ndarray    # base velocity direction (3,)
+    amplitude: float      # oscillation amplitude [m]
+    frequency: float      # oscillation frequency [Hz]
+    
+    def state(self, t: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Returns position and velocity for sinusoidal weaving motion.
+        """
+        # Base linear motion
+        r_base = self.r0 + self.v_base * t
+        
+        # Create perpendicular direction for oscillation
+        if norm(self.v_base) > 1e-6:
+            v_unit = unit(self.v_base)
+            # Use Z-axis as reference
+            ref_axis = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(v_unit, ref_axis)) > 0.9:
+                ref_axis = np.array([1.0, 0.0, 0.0])
+            perp_dir = unit(np.cross(v_unit, ref_axis))
+        else:
+            perp_dir = np.array([1.0, 0.0, 0.0])
+        
+        # Sinusoidal oscillation
+        omega = 2.0 * math.pi * self.frequency
+        phase = omega * t
+        
+        r_osc = self.amplitude * math.sin(phase) * perp_dir
+        v_osc = self.amplitude * omega * math.cos(phase) * perp_dir
+        
+        position = r_base + r_osc
+        velocity = self.v_base + v_osc
+        
+        return (position, velocity)
+
+@dataclass
+class TargetTurning:
+    """
+    Simple turning trajectory - Shahed gradually turns right while maintaining speed.
+    Creates a gentle arc/spiral trajectory.
+    """
+    r0: np.ndarray        # initial position (3,)
+    v0: np.ndarray        # initial velocity (3,)
+    turn_rate: float      # turn rate [rad/s] - positive for right turn
+    
+    def state(self, t: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Returns position and velocity for constant turn rate trajectory.
+        The target maintains constant speed but gradually changes direction.
+        """
+        speed = norm(self.v0)
+        if speed < 1e-6:
+            return (self.r0, self.v0)
+        
+        # If no turn rate, just linear motion
+        if abs(self.turn_rate) < 1e-6:
+            return (self.r0 + self.v0 * t, self.v0)
+        
+        # For constant turn rate, we have circular motion in the horizontal plane
+        # The trajectory is a helix if there's vertical velocity component
+        
+        # Separate horizontal and vertical components
+        v0_horizontal = np.array([self.v0[0], self.v0[1], 0.0])
+        v0_vertical = np.array([0.0, 0.0, self.v0[2]])
+        
+        speed_horizontal = norm(v0_horizontal)
+        
+        if speed_horizontal < 1e-6:
+            # Pure vertical motion - no turning possible
+            position = self.r0 + self.v0 * t
+            velocity = self.v0
+        else:
+            # Calculate circular motion parameters
+            radius = speed_horizontal / abs(self.turn_rate)
+            
+            # Initial heading angle in horizontal plane
+            initial_heading = math.atan2(v0_horizontal[1], v0_horizontal[0])
+            
+            # Center of circular motion (perpendicular to initial velocity)
+            # For right turn (positive turn_rate), center is to the right of initial velocity
+            center_direction = np.array([-math.sin(initial_heading), math.cos(initial_heading), 0.0])
+            if self.turn_rate < 0:  # Left turn
+                center_direction = -center_direction
+            
+            center = self.r0 + radius * center_direction
+            
+            # Current angle around the circle
+            angle = initial_heading + self.turn_rate * t
+            
+            # Position on the circle
+            circle_pos = center + radius * np.array([math.cos(angle), math.sin(angle), 0.0])
+            
+            # Add vertical motion
+            vertical_pos = self.r0[2] + v0_vertical[2] * t
+            position = np.array([circle_pos[0], circle_pos[1], vertical_pos])
+            
+            # Velocity is tangent to the circle plus vertical component
+            horizontal_velocity = speed_horizontal * np.array([-math.sin(angle), math.cos(angle), 0.0])
+            velocity = horizontal_velocity + v0_vertical
+        
+        return (position, velocity)
+
+@dataclass
 class InterceptorOnSphere:
     R: float                  # sphere radius
     u: np.ndarray             # current unit position vector on sphere (3,)
@@ -170,8 +327,9 @@ def predict_impact_or_closest(r_t: np.ndarray, v_t: np.ndarray, R: float) -> Imp
 
 @dataclass
 class PNParams:
-    N: float = 3.0               # navigation constant
+    N: float = 5               # navigation constant
     tgo_mode: str = "impact"     # "impact" or "distance"
+    pn_mode: str = "apn"     # "apn" or "pn_only"
     chi_rate_max: float = math.radians(60.0)  # max turn rate (rad/s)
 
 class SphericalPNGuidance:
@@ -218,8 +376,13 @@ class SphericalPNGuidance:
         else:
             t_go = max(1e-3, self.R * gamma / max(self.v_max, 1e-6))
 
-        # PN + timing augmentation (APN)
-        chi_dot_cmd = gamma / t_go + self.params.N * chi_los_rate
+        if self.params.pn_mode == "apn":
+            # PN + timing augmentation (APN)
+            chi_dot_cmd = gamma / t_go + self.params.N * chi_los_rate
+        else:
+            # PN only (works better for little curvatures)
+            chi_dot_cmd = self.params.N * chi_los_rate
+
         chi_dot_cmd = clamp(chi_dot_cmd, -self.params.chi_rate_max, self.params.chi_rate_max)
 
         # Speed schedule: try to arrive on time, subject to v_max
@@ -387,9 +550,9 @@ class Simulator:
                 print("Unknown command. Use ENTER for next step, 'q' to quit.")
 
     def plot_3d(self):
-        """Original plotting method - fixed sphere rendering"""
+        """Original plotting method - fixed sphere rendering with vector arrows"""
         # Prepare arrays
-        U = np.array(self.u_hist)                    # (N,3)
+        U = np.array(self.u_hist)                   
         RT = np.array(self.r_t_hist)
         US = np.array(self.u_star_hist)
         R = self.cfg.R
@@ -424,6 +587,53 @@ class Simulator:
         ax.text(*(start_pt + 0.05 * R * unit(start_pt)), "START", fontsize=10, fontweight='bold')
         ax.text(*(end_pt   + 0.05 * R * unit(end_pt)),   "END",   fontsize=10, fontweight='bold')
 
+        # Draw coordinate frame vectors at final drone position
+        if len(U) > 0:
+            final_u = U[-1]  # Final unit position vector
+            final_u_star = US[-1]  # Final aimpoint unit vector
+            
+            # Calculate local tangent frame vectors
+            e, n = tangent_basis(final_u)
+            b = project_to_tangent(final_u, final_u_star)  # Bearing vector to aimpoint
+            
+            # Vector scaling for visibility
+            vector_scale = R * 0.12
+            
+            # Position vector u (radial, from origin to drone)
+            ax.quiver(0, 0, 0, 
+                     final_u[0] * vector_scale, 
+                     final_u[1] * vector_scale, 
+                     final_u[2] * vector_scale,
+                     color='purple', linewidth=3, arrow_length_ratio=0.1, 
+                     label='u (radial)')
+            
+            # At final drone position, draw tangent frame vectors
+            final_drone_pos = end_pt
+            
+            # East vector e (tangent to sphere)
+            ax.quiver(final_drone_pos[0], final_drone_pos[1], final_drone_pos[2],
+                     e[0] * vector_scale, 
+                     e[1] * vector_scale, 
+                     e[2] * vector_scale,
+                     color='cyan', linewidth=2, arrow_length_ratio=0.15,
+                     label='e (east)')
+            
+            # North vector n (tangent to sphere)
+            ax.quiver(final_drone_pos[0], final_drone_pos[1], final_drone_pos[2],
+                     n[0] * vector_scale, 
+                     n[1] * vector_scale, 
+                     n[2] * vector_scale,
+                     color='magenta', linewidth=2, arrow_length_ratio=0.15,
+                     label='n (north)')
+            
+            # Bearing vector b (tangent projection toward aimpoint)
+            ax.quiver(final_drone_pos[0], final_drone_pos[1], final_drone_pos[2],
+                     b[0] * vector_scale, 
+                     b[1] * vector_scale, 
+                     b[2] * vector_scale,
+                     color='gold', linewidth=2, arrow_length_ratio=0.15,
+                     label='b (bearing to aimpoint)')
+
         # CRITICAL: Force equal aspect ratio for round sphere
         max_range = R * 1.2
         ax.set_xlim(-max_range, max_range)
@@ -435,7 +645,7 @@ class Simulator:
         ax.set_xlabel("X [m]", fontsize=12)
         ax.set_ylabel("Y [m]", fontsize=12)
         ax.set_zlabel("Z [m]", fontsize=12)
-        ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0))
+        ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0), fontsize=9)
         
         # Add simulation info to title
         final_time = self.t_hist[-1] if self.t_hist else 0
@@ -494,6 +704,53 @@ class Simulator:
             ax.scatter(*start_pt, s=100, color='green', edgecolors='black',
                       linewidths=1, label='Drone start', zorder=7, marker='s')
 
+        # Draw coordinate frame vectors at current drone position
+        if len(U) > 0:
+            current_u = U[-1]  # Current unit position vector
+            current_u_star = US[-1]  # Current aimpoint unit vector
+            
+            # Calculate local tangent frame vectors
+            e, n = tangent_basis(current_u)
+            b = project_to_tangent(current_u, current_u_star)  # Bearing vector to aimpoint
+            
+            # Vector scaling for visibility
+            vector_scale = R * 0.15
+            
+            # Position vector u (radial, from origin to drone)
+            ax.quiver(0, 0, 0, 
+                     current_u[0] * vector_scale, 
+                     current_u[1] * vector_scale, 
+                     current_u[2] * vector_scale,
+                     color='purple', linewidth=3, arrow_length_ratio=0.1, 
+                     label='u (radial)')
+            
+            # At drone position, draw tangent frame vectors
+            drone_pos = current_drone_pos
+            
+            # East vector e (tangent to sphere)
+            ax.quiver(drone_pos[0], drone_pos[1], drone_pos[2],
+                     e[0] * vector_scale, 
+                     e[1] * vector_scale, 
+                     e[2] * vector_scale,
+                     color='cyan', linewidth=2, arrow_length_ratio=0.15,
+                     label='e (east)')
+            
+            # North vector n (tangent to sphere)
+            ax.quiver(drone_pos[0], drone_pos[1], drone_pos[2],
+                     n[0] * vector_scale, 
+                     n[1] * vector_scale, 
+                     n[2] * vector_scale,
+                     color='magenta', linewidth=2, arrow_length_ratio=0.15,
+                     label='n (north)')
+            
+            # Bearing vector b (tangent projection toward aimpoint)
+            ax.quiver(drone_pos[0], drone_pos[1], drone_pos[2],
+                     b[0] * vector_scale, 
+                     b[1] * vector_scale, 
+                     b[2] * vector_scale,
+                     color='gold', linewidth=2, arrow_length_ratio=0.15,
+                     label='b (bearing to aimpoint)')
+
         # CRITICAL: Force equal aspect ratio for round sphere
         max_range = R * 1.3
         ax.set_xlim(-max_range, max_range)
@@ -548,7 +805,152 @@ class Simulator:
 # Example scenario
 # --------------------------------
 
+def example_curved_trajectory():
+    """
+    Example scenario with curved/evasive Shahed trajectory.
+    The target performs helical motion while approaching the sphere.
+    """
+    print("\n=== CURVED TRAJECTORY SCENARIO ===")
+    
+    # ---- Parameters ----
+    R = 1000.0                           # protection sphere radius [m]
+    dt = 0.05                            # sim step [s]
+    T  = 45.0                            # total time [s]
+    v_max = 85.0                         # interceptor max tangential speed [m/s]
+
+    # PN tuning - slightly more aggressive for evasive target
+    pn = PNParams(
+        N=4.0,                           # higher navigation gain
+        tgo_mode="impact",                # or "distance"
+        pn_mode="apn",                    # or "pn_only"
+        chi_rate_max=math.radians(120.0)  # higher turn rate capability
+    )
+    cfg = SimConfig(R=R, dt=dt, T=T, v_max=v_max, pn=pn)
+
+    # ---- Curved Target (Shahed) trajectory ----
+    # Base approach trajectory
+    r0 = np.array([1200.0, -3000.0, 800.0])     # initial position [m]
+    v_linear = np.array([-15.0, +55.0, -12.0])  # base velocity [m/s]
+    
+    # Helical evasive maneuver parameters
+    orbit_center = r0  # helical motion around initial position
+    orbit_radius = 200.0  # [m] - radius of evasive circles
+    omega = 0.15  # [rad/s] - evasive maneuver frequency
+    
+    target = TargetCurved(
+        r0=r0,
+        v_linear=v_linear,
+        orbit_center=orbit_center,
+        orbit_radius=orbit_radius,
+        omega=omega,
+        phase_offset=0.0
+    )
+
+    # ---- Interceptor initial state ----
+    # Position drone strategically to intercept curved trajectory
+    u0 = unit(np.array([0.8, -0.5, 0.3]))
+    interceptor = InterceptorOnSphere(R=R, u=u0, chi=0.0, v_max=v_max)
+
+    # Initialize heading toward predicted aimpoint
+    r_t0, v_t0 = target.state(0.0)
+    sol0 = predict_impact_or_closest(r_t0, v_t0, R)
+    e0, n0 = tangent_basis(u0)
+    b0 = project_to_tangent(u0, sol0.u_star)
+    interceptor.chi = math.atan2(np.dot(b0, e0), np.dot(b0, n0))
+
+    # ---- Run simulation ----
+    sim = Simulator(cfg, target, interceptor)
+    
+    print(f"Target initial position: {r0}")
+    print(f"Target linear velocity: {v_linear} m/s")
+    print(f"Evasive maneuver: radius={orbit_radius}m, frequency={omega:.2f} rad/s")
+    print(f"Interceptor max speed: {v_max} m/s")
+    
+    # Choose simulation mode
+    print("\nChoose simulation mode:")
+    print("1. Interactive step-by-step")
+    print("2. Full auto-run with plots")
+    
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    if choice == "1":
+        sim.run_interactive()
+    else:
+        sim.run()
+        sim.plot_3d()
+        sim.plot_time_series()
+
+def example_sinusoidal_trajectory():
+    """
+    Example scenario with sinusoidal weaving Shahed trajectory.
+    """
+    print("\n=== SINUSOIDAL WEAVING SCENARIO ===")
+    
+    # ---- Parameters ----
+    R = 1000.0
+    dt = 0.05
+    T = 40.0
+    v_max = 90.0
+
+    # PN tuning
+    pn = PNParams(
+        N=5,
+        tgo_mode="impact",                  # or "distance"
+        pn_mode="apn",                      # or "pn_only"
+        chi_rate_max=math.radians(100.0)
+    )
+    cfg = SimConfig(R=R, dt=dt, T=T, v_max=v_max, pn=pn)
+
+    # ---- Sinusoidal Target ----
+    r0 = np.array([-500.0, -2800.0, 600.0])
+    v_base = np.array([8.0, +65.0, -15.0])  # base approach velocity
+    amplitude = 300.0  # [m] weaving amplitude
+    frequency = 0.08   # [Hz] weaving frequency
+    
+    target = TargetSinusoidal(
+        r0=r0,
+        v_base=v_base,
+        amplitude=amplitude,
+        frequency=frequency
+    )
+
+    # ---- Interceptor ----
+    u0 = unit(np.array([-0.4, -0.8, 0.4]))
+    interceptor = InterceptorOnSphere(R=R, u=u0, chi=0.0, v_max=v_max)
+
+    # Initialize heading
+    r_t0, v_t0 = target.state(0.0)
+    sol0 = predict_impact_or_closest(r_t0, v_t0, R)
+    e0, n0 = tangent_basis(u0)
+    b0 = project_to_tangent(u0, sol0.u_star)
+    interceptor.chi = math.atan2(np.dot(b0, e0), np.dot(b0, n0))
+
+    # ---- Run simulation ----
+    sim = Simulator(cfg, target, interceptor)
+    
+    print(f"Target initial position: {r0}")
+    print(f"Target base velocity: {v_base} m/s")
+    print(f"Weaving: amplitude={amplitude}m, frequency={frequency:.3f} Hz")
+    
+    print("\nChoose simulation mode:")
+    print("1. Interactive step-by-step")
+    print("2. Full auto-run with plots")
+    
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    if choice == "1":
+        sim.run_interactive()
+    else:
+        sim.run()
+        sim.plot_3d()
+        sim.plot_time_series()
+
 def example():
+    """
+    Original linear trajectory scenario.
+    """
+    print("\n=== LINEAR TRAJECTORY SCENARIO ===")
+    
     # ---- Parameters you can tweak easily ----
     R = 1000.0                           # protection sphere radius [m]
     dt = 0.05                            # sim step [s]
@@ -557,8 +959,9 @@ def example():
 
     # PN tuning
     pn = PNParams(
-        N=3.5,
+        N=5,
         tgo_mode="impact",               # or "distance"
+        pn_mode="apn",                   # or "pn_only"
         chi_rate_max=math.radians(90.0)
     )
     cfg = SimConfig(R=R, dt=dt, T=T, v_max=v_max, pn=pn)
@@ -598,5 +1001,117 @@ def example():
         sim.plot_3d()
         sim.plot_time_series()
 
+def example_simple_turn():
+    """
+    Example scenario with simple turning Shahed - gradually turns right.
+    """
+    print("\n=== SIMPLE TURNING SCENARIO ===")
+    
+    # ---- Parameters ----
+    R = 1000.0                           # protection sphere radius [m]
+    dt = 0.05                            # sim step [s]
+    T  = 55.0                            # total time [s] - longer to see the turn
+    v_max = 75.0                         # interceptor max tangential speed [m/s]
+
+    # PN tuning - standard settings for gentle turn
+    pn = PNParams(
+        N=5,
+        tgo_mode="impact",                  # or "distance"
+        pn_mode="apn",                      # or "pn_only"
+        chi_rate_max=math.radians(80.0)
+    )
+    cfg = SimConfig(R=R, dt=dt, T=T, v_max=v_max, pn=pn)
+
+    # ---- Simple Turning Target ----
+    r0 = np.array([-800.0, -2500.0, 400.0])     # initial position [m]
+    v0 = np.array([25.0, +55.0, -8.0])          # initial velocity [m/s]
+    turn_rate = math.radians(2.0)                # 2 degrees/second right turn
+    
+    target = TargetTurning(
+        r0=r0,
+        v0=v0,
+        turn_rate=turn_rate
+    )
+
+    # ---- Interceptor initial state ----
+    # Position drone to intercept the turning trajectory
+    u0 = unit(np.array([-0.6, -0.7, 0.4]))
+    interceptor = InterceptorOnSphere(R=R, u=u0, chi=0.0, v_max=v_max)
+
+    # Initialize heading toward predicted aimpoint
+    r_t0, v_t0 = target.state(0.0)
+    sol0 = predict_impact_or_closest(r_t0, v_t0, R)
+    e0, n0 = tangent_basis(u0)
+    b0 = project_to_tangent(u0, sol0.u_star)
+    interceptor.chi = math.atan2(np.dot(b0, e0), np.dot(b0, n0))
+
+    # ---- Run simulation ----
+    sim = Simulator(cfg, target, interceptor)
+    
+    print(f"Target initial position: {r0}")
+    print(f"Target initial velocity: {v0} m/s")
+    print(f"Turn rate: {math.degrees(turn_rate):.1f} °/s (right turn)")
+    print(f"Initial speed: {norm(v0):.1f} m/s")
+    
+    # Calculate and display turn radius for reference
+    horizontal_speed = norm(v0[:2])
+    if abs(turn_rate) > 1e-6:
+        turn_radius = horizontal_speed / abs(turn_rate)
+        print(f"Turn radius: {turn_radius:.0f} m")
+    
+    print("\nChoose simulation mode:")
+    print("1. Interactive step-by-step")
+    print("2. Full auto-run with plots")
+    
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    if choice == "1":
+        sim.run_interactive()
+    else:
+        sim.run()
+        sim.plot_3d()
+        sim.plot_time_series()
+
+def main():
+    """
+    Main function to choose between different trajectory scenarios.
+    """
+    print("=== Spherical Proportional Navigation Simulator ===")
+    print("Choose a scenario:")
+    print("1. Linear trajectory (original)")
+    print("2. Curved/helical trajectory") 
+    print("3. Sinusoidal weaving trajectory")
+    print("4. Simple turning trajectory")
+    print("5. Exit")
+    
+    while True:
+        try:
+            choice = input("\nEnter scenario number (1-5): ").strip()
+            
+            if choice == "1":
+                example()
+                break
+            elif choice == "2":
+                example_curved_trajectory()
+                break
+            elif choice == "3":
+                example_sinusoidal_trajectory()
+                break
+            elif choice == "4":
+                example_simple_turn()
+                break
+            elif choice == "5":
+                print("Exiting...")
+                break
+            else:
+                print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
+                
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+            break
+
 if __name__ == "__main__":
-    example()
+    main()
