@@ -1017,7 +1017,7 @@ def example_simple_turn():
     pn = PNParams(
         N=5,
         tgo_mode="impact",                  # or "distance"
-        pn_mode="apn",                      # or "pn_only"
+        pn_mode="pn_only",                      # or "pn_only"
         chi_rate_max=math.radians(80.0)
     )
     cfg = SimConfig(R=R, dt=dt, T=T, v_max=v_max, pn=pn)
